@@ -13,6 +13,11 @@
 #   Check Package:             'Cmd + Shift + E'
 #   Test Package:              'Cmd + Shift + T'
 
+#Libraries needed
+library("ipred")
+library("rpart")
+library("mlbench")
+
 #MAIN FUNCTIONS
 
 METDES <- setClass("metades", slots=list(
@@ -31,8 +36,8 @@ METDES <- setClass("metades", slots=list(
   knn_classifier = "character"
 ))
 
-init <- function(pool_classifiers=' ',
-                 meta_classifiers=' ',
+init <- function(pool_classifiers=NaN,
+                 meta_classifiers=NaN,
                  k=7,
                  Kp=5,
                  Hc=1.0,
@@ -40,9 +45,9 @@ init <- function(pool_classifiers=' ',
                  mode='selection',
                  DFP=F,
                  with_IH=F,
-                 safe_k=' ',
+                 safe_k=NaN,
                  IH_rate=0.30,
-                 random_state=' ',
+                 random_state=NaN,
                  knn_classifier='knn'){
   #initialization of the METDES class
   METDES()
@@ -62,44 +67,27 @@ init <- function(pool_classifiers=' ',
            knn_classifier = knn_classifier)
 }
 
-fit <- function(X, y) {
+X <- as.data.frame(matrix(rnorm(1000), ncol=10))
+y <- factor(ifelse(apply(X, 1, mean) > 0, 1, 0))
+learn <- cbind(y, X)
+mt <- bagging(y ~., data = learn, coob = T, ns = 9)
+
+fit <- function(X) {
+  overproduction()
+  metatraining()
+  generalization()
+}
+
+overproduction <- function() {
+  d@pool_classifiers <- bagging(y ~., data = learn, coob = T)
+}
+
+metatraining <- function() {
+  c <- d@pool_classifiers
 
 }
 
-predict <- function(X){
-
-}
-
-predict_proba <- function(X) {
-
-}
-
-select <- function(competences, selection_threshold = 0.5){
-  #competences is a matrix,
-  #where first column is the Number of the Classifier
-  #second column is the competence lvl of the Classifier
-
-  if(dim(competences)[1] < 2) competences <- 0 #todo
-  res <- competences[(competences[,2] > selection_threshold)]
-  selected_classifiers <- matrix(res, nrow = length(res)/2)
-
-  #Returns the matrix of selected Classifiers as a matrix
-  #first column is the Number of the Classifier
-  #second column is the competence lvl of tthe Classifier
-  return(selected_classifiers)
-}
-
-score <- function(X, y, sample_weight = NULL){
-
-}
-
-estimate_competence_from_proba <- function(query, neighbors, probabilities, distances = NULL){
-
-
-}
-#-----------------------------------------------
-#Secondary function
-get_similar_out_profiles <- function(probabilities, kp = 5) {
+generalization <- function() {
 
 }
 
