@@ -42,23 +42,54 @@ init <- function(pool_classifiers=NaN, meta_classifiers=NaN, Hc=.5) {
 data(BreastCancer)
 BreastCancer$Id <- NULL
 
-learn <- BreastCancer[1:20,]
-learn$Id <- NULL
-test <- BreastCancer[21:40, 1:10]
-test$Id <- NULL
+train <- BreastCancer[1:20,]
+train$Id <- NULL
+train_lambda <- BreastCancer[21:40, 1:10]
+train_lambda$Id <- NULL
+train_lambda$Class <- NULL
 
-fit <- function(data) {
-  overproduction(data)
-  #metatraining()
+t_lambda <- BreastCancer[1,]
+t_lambda$Class <- NULL
+
+fit <- function(train, train_lambda) {
+  overproduction(train)
+  metatraining(train_lambda)
   #generalization()
 }
 
 overproduction <- function(data) {
-  d@pool_classifiers <<- bagging(Class ~., data = data, coob = T)
+  d@pool_classifiers <<- bagging(Class ~., data = data, coob = T) #Learn how to use var instead of Class
 }
 
-metatraining <- function() {
-  c <- d@pool_classifiers
+metatraining <- function(data) {
+    n <- dim(data)[1]
+    for (i in 1:n){
+      row <- data[i, ]
+      h <- consensus(row)
+      print(h)
+      if (h < 0.7){
+        t_lambda <<- rbind(t_lambda, row)
+        print("YES!!!")
+      }
+    }
+}
+
+#consensus() = max(C_0, C_1, …, C_L) / L.
+#Здесь C_i – количество классификаторов,  «проголосовавших» за класс i, L – общее количество классов.
+consensus <- function(row){
+  n <- length(d@pool_classifiers$mtrees)
+  res_final <- numeric()
+  #TO-DO: comment
+  for(i in 1:n){
+    c <- get_tree_n(i)
+    res <- predict(c, row)
+    res_final <- rbind(res_final, res[1,])
+  }
+  #calculate the sum for each Class in res_final
+  res_final_col_sums <- colSums(res_final)
+  major_class_vote <- max(res_final_col_sums)
+  cons_coef <- major_class_vote / dim(res_final)[1]
+  return(cons_coef)
 }
 
 generalization <- function() {
@@ -100,4 +131,5 @@ f2 <- mt$mtrees[[19]]$btree
 plot(f2)
 text(f2, use.n=F)
 
-predict(f2, test)
+res <- predict(f2, test)
+res[1,1:2]
