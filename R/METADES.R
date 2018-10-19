@@ -48,8 +48,8 @@ train_lambda <- BreastCancer[21:40, 1:10]
 train_lambda$Id <- NULL
 train_lambda$Class <- NULL
 
-t_lambda <- BreastCancer[1,]
-t_lambda$Class <- NULL
+#t_lambda <- BreastCancer[1,]
+#t_lambda$Class <- NULL
 
 fit <- function(train, train_lambda) {
   overproduction(train)
@@ -63,12 +63,20 @@ overproduction <- function(data) {
 
 metatraining <- function(data) {
     n <- dim(data)[1]
+    first <- 1
+    #For each data row in Sample
     for (i in 1:n){
       row <- data[i, ]
-      h <- consensus(row)
+      h <- consensus(row) #Calculate consensus coef.
       print(h)
       if (h < 0.7){
-        t_lambda <<- rbind(t_lambda, row)
+        if(first==1){
+          t_lambda <<- row
+          first <- 2
+        }
+        else{
+          t_lambda <<- rbind(t_lambda, row)
+        }
         print("YES!!!")
       }
     }
