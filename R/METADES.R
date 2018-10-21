@@ -42,14 +42,12 @@ init <- function(pool_classifiers=NaN, meta_classifiers=NaN, Hc=.5) {
 data(BreastCancer)
 BreastCancer$Id <- NULL
 
-train <- BreastCancer[1:20,]
+
+train <- BreastCancer[1:20,] #this is t
 train$Id <- NULL
-train_lambda <- BreastCancer[21:40, 1:10]
+train_lambda <- BreastCancer[21:40, 1:10] #this is t_lambda
 train_lambda$Id <- NULL
 train_lambda$Class <- NULL
-
-#t_lambda <- BreastCancer[1,]
-#t_lambda$Class <- NULL
 
 fit <- function(train, train_lambda) {
   overproduction(train)
@@ -64,22 +62,27 @@ overproduction <- function(data) {
 metatraining <- function(data) {
     n <- dim(data)[1]
     first <- 1
-    #For each data row in Sample
+    #For each x_j ∈ t_lambda
     for (i in 1:n){
       row <- data[i, ]
       h <- consensus(row) #Calculate consensus coef.
       print(h)
-      if (h < 0.7){
+      if (h < 0.9){
         if(first==1){
-          t_lambda <<- row
+          t_lambda_astr <<- row
           first <- 2
         }
         else{
-          t_lambda <<- rbind(t_lambda, row)
+          t_lambda_astr <<- rbind(t_lambda_astr, row)
         }
         print("YES!!!")
       }
     }
+    #Compute competence region for each element in t_lambda_astr
+    #teta_j = {x1, ..., x_k} this is why teta_j is a List
+    teta <- competence_region(t_labda_astr)
+    #Compute output profile
+    fi <- output_profile(t_lambda_astr)
 }
 
 #consensus() = max(C_0, C_1, …, C_L) / L.
@@ -100,16 +103,46 @@ consensus <- function(row){
   return(cons_coef)
 }
 
-generalization <- function() {
+#Compute competence region for each element in t_lambda_astr
+competence_region <- function(t){
 
 }
 
-#Testing function
+#The output profile of the instance  is denoted by x_tilda = {x_tilda_1, ... , x_tilda_m}
+#where each x_tilda_i is the decision yielded by the base classifier ci for the sample
+#input: t_labmda_astr
+output_profile <- function(t){
+  res <- list(name="Output Profile", o = NULL)
+  n <- dim(t)[1]
+  for (i in 1:n){
+    el <- t[i, ]
+    x_tilda <- get_predictions(el)
+    res$o[[i]] <- x_tilda
+  }
+
+  return(res)
+}
+
+get_predictions <- function(el){
+  n <- length(d@pool_classifiers$mtrees)
+  res_final <- numeric()
+  for(i in 1:n){
+    c <- get_tree_n(i)
+    res <- predict(c, el)
+    res_final <- rbind(res_final, res[1,])
+  }
+  return(res_final)
+}
+
 get_tree_n <- function(n){
   #returns the n regression tree from the pool of classificators
   #the pool of classificators is stored in variable "d"
   #TO-DO if clause
   return(d@pool_classifiers$mtrees[[n]]$btree)
+}
+
+generalization <- function() {
+
 }
 
 #TO-DO take it to another file
@@ -141,3 +174,10 @@ text(f2, use.n=F)
 
 res <- predict(f2, test)
 res[1,1:2]
+
+#testing data structure List
+v1 <- c(1:4)
+v2 <- c(2:5)
+o <- list(name = "kek", x = NULL)
+o$x[[1]] <- v1
+o$x[[2]] <- v2
