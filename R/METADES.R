@@ -1,26 +1,17 @@
-# Hello, world!
-#
-# This is an example function named 'hello'
-# which prints 'Hello, world!'.
-#
-# You can learn more about package authoring with RStudio at:
-#
-#   http://r-pkgs.had.co.nz/
-#
-# Some useful keyboard shortcuts for package authoring:
-#
-#   Build and Reload Package:  'Cmd + Shift + B'
-#   Check Package:             'Cmd + Shift + E'
-#   Test Package:              'Cmd + Shift + T'
+# Hello, this is the first META-DES package for R
+# made by Nikita Volodarskiy
+
 
 #Libraries needed
 library("ipred")
 library("rpart")
 library("mlbench")
+library("FNN")
+library("zoo")
 
 #MAIN FUNCTIONS
 #The Class of MET-DES
-METDES <- setClass("metades", slots=list(
+METADES <- setClass("metades", slots=list(
   pool_classifiers = "ANY",
   meta_classifiers = "ANY",
   Hc = "numeric"
@@ -28,10 +19,12 @@ METDES <- setClass("metades", slots=list(
 
 init <- function(pool_classifiers=NaN, meta_classifiers=NaN, Hc=.5) {
   #initialization of the METDES class
-  METDES()
+  METADES()
   library("ipred")
   library("rpart")
   library("mlbench")
+  library("FNN")
+  library("zoo")
 
   d <<- new("metades", pool_classifiers=pool_classifiers,
             meta_classifiers = meta_classifiers,
@@ -47,7 +40,7 @@ train <- BreastCancer[1:20,] #this is t
 train$Id <- NULL
 train_lambda <- BreastCancer[21:40, 1:10] #this is t_lambda
 train_lambda$Id <- NULL
-train_lambda$Class <- NULL
+
 
 fit <- function(train, train_lambda) {
   overproduction(train)
@@ -80,9 +73,9 @@ metatraining <- function(data) {
     }
     #Compute competence region for each element in t_lambda_astr
     #teta_j = {x1, ..., x_k} this is why teta_j is a List
-    teta <- competence_region(t_labda_astr)
+    teta <<- competence_region(data, t_lambda_astr)
     #Compute output profile
-    fi <- output_profile(t_lambda_astr)
+    fi <<- output_profile(t_lambda_astr)
 }
 
 #consensus() = max(C_0, C_1, …, C_L) / L.
@@ -104,18 +97,44 @@ consensus <- function(row){
 }
 
 #Compute competence region for each element in t_lambda_astr
-competence_region <- function(t){
+#input: t_lambda, t_lambda_astr
+competence_region <- function(tl, tla){
+  roc <- list(name="Regions of Competence", o = NULL)
+  k <- round(sqrt(dim(tl)[1])) #choosing an appropriate 'k' for k-NN
+  class_crop <- ncol(tl) - 1
+  #compute k nearest neighbors from t_lambda for each element in t_lambda_astr
+  n <- dim(tla)[1]
+  #to use k-NN no missing values are allowed
+  tl[is.na(tl)] <- 2 #think of this a bit better
+  tla[is.na(tla)] <- 2 #think of this a bit better
 
+  #format to double structure
+  dtl <- t(do.call(rbind, lapply(tl, as.numeric)))
+  dtla <- t(do.call(rbind, lapply(tla, as.numeric)))
+  labels <- tl[,ncol(tl)]
+
+  k_nn <- knn(dtl[,1:class_crop], dtla[,1:class_crop], labels, k = k, algorithm="cover_tree")
+  indices <- attr(k_nn, "nn.index")
+  for (i in 1:n){
+    el <- tla[i,]
+    res_final <- numeric()
+    for (j in 1:k){
+      res <- tl[indices[i, j],]
+      res_final <- rbind(res_final, res[1,])
+    }
+    roc$o[[i]] <- res_final
+  }
+  return(roc)
 }
 
 #The output profile of the instance  is denoted by x_tilda = {x_tilda_1, ... , x_tilda_m}
 #where each x_tilda_i is the decision yielded by the base classifier ci for the sample
 #input: t_labmda_astr
-output_profile <- function(t){
+output_profile <- function(tla){
   res <- list(name="Output Profile", o = NULL)
-  n <- dim(t)[1]
+  n <- dim(tla)[1]
   for (i in 1:n){
-    el <- t[i, ]
+    el <- tla[i, ]
     x_tilda <- get_predictions(el)
     res$o[[i]] <- x_tilda
   }
@@ -181,3 +200,19 @@ v2 <- c(2:5)
 o <- list(name = "kek", x = NULL)
 o$x[[1]] <- v1
 o$x[[2]] <- v2
+
+#TESTING k-NN
+#seraching for nearest neighbors test FNN : knn methode
+tr <- BreastCancer[1:20,] #this is t
+ntr <- t(do.call(rbind, lapply(tr, as.numeric)))
+lb <- tr$Class
+ts <- BreastCancer[21:25,] #this is t_lambda
+ts[is.na(ts)] <- 2
+nts<- t(do.call(rbind, lapply(ts, as.numeric)))
+cl<- lb
+
+
+ks <- FNN :: knn(ntr[,1:9], nts[,1:9], cl, k = 5)
+ats <- attributes(.Last.value)
+indices <- attr(ks, "nn.index")
+
