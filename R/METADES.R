@@ -76,6 +76,44 @@ metatraining <- function(data) {
     teta <<- competence_region(data, t_lambda_astr)
     #Compute output profile
     fi <<- output_profile(t_lambda_astr)
+
+    #Extracting features
+    #Neighbors׳ hard classification:
+    #f1 is a matrix
+    f_1 <<- get_feature1(teta)
+}
+
+generalization <- function() {
+
+}
+
+#Neighbors׳ hard classification logics:
+get_feature1 <- function(teta){
+  n <- length(teta$o)
+  #join all elements from teta, cuz' we don't need them separately here.
+  teta_elems <- numeric()
+  for(i in 1:n){
+    el <- teta$o[[i]]
+    teta_elems <- rbind(teta_elems, el)
+  }
+  teta_elems <<- teta_elems
+  #Matrix with feature 1. Default all zero:
+  f1 <- matrix(0, length(d@pool_classifiers$mtrees), length(teta_elems))
+  #get predictions
+  n <- length(teta_elems)
+  for (i in 1:n){
+    el <- teta_elems[i,1:ncol(teta_elems)-1] #element without class
+    preds <- get_predictions(el)
+    n2 <- dim(preds)[1]
+    for (j in 1:n2){
+      cls <- names(which(preds[j,] == 1))
+      #If prediction is correct change value to 1:
+      if (cls == teta_elems[i, ncol(teta_elems)]){
+        f1[j, i] <- 1
+      }
+    }
+  }
+  return(f1)
 }
 
 #consensus() = max(C_0, C_1, …, C_L) / L.
@@ -158,10 +196,6 @@ get_tree_n <- function(n){
   #the pool of classificators is stored in variable "d"
   #TO-DO if clause
   return(d@pool_classifiers$mtrees[[n]]$btree)
-}
-
-generalization <- function() {
-
 }
 
 #TO-DO take it to another file
