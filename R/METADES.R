@@ -103,12 +103,14 @@ get_feature1 <- function(teta){
   n <- length(teta_elems)
   for (i in 1:n){
     el <- teta_elems[i,1:ncol(teta_elems)-1] #element without class
-    preds <- get_predictions(el)
+    preds <- get_predictions_class(el)
     n2 <- dim(preds)[1]
     for (j in 1:n2){
-      cls <- names(which(preds[j,] == 1))
+      cls <- preds[j]
+      print(cls)
+      print(teta_elems[i, ncol(teta_elems)])
       #If prediction is correct change value to 1:
-      if (cls == teta_elems[i, ncol(teta_elems)]){
+      if (levels(teta_elems[i, ncol(teta_elems)])[cls] == levels(teta_elems[i, ncol(teta_elems)])[1]){
         f1[j, i] <- 1
       }
     }
@@ -185,7 +187,19 @@ get_predictions <- function(el){
   for(i in 1:n){
     c <- get_tree_n(i)
     res <- predict(c, el, type="vector")
-    res_final <- rbind(res_final, res[1,])
+    res_final <- rbind(res_final, res)
+  }
+  rownames(res_final) <- c(1:n)
+  return(res_final)
+}
+
+get_predictions_class <- function(el){
+  n <- length(d@pool_classifiers$mtrees)
+  res_final <- numeric()
+  for(i in 1:n){
+    c <- get_tree_n(i)
+    res <- predict(c, el, type="class")
+    res_final <- rbind(res_final, res)
   }
   return(res_final)
 }
