@@ -35,11 +35,21 @@ init <- function(pool_classifiers=NaN, meta_classifiers=NaN, Hc=.5) {
 data(BreastCancer)
 BreastCancer$Id <- NULL
 
-
-train <- BreastCancer[1:20,] #this is t
+train <- BreastCancer[1:50,] #this is t
 train$Id <- NULL
-train_lambda <- BreastCancer[21:40, 1:10] #this is t_lambda
+train_lambda <- BreastCancer[1:150, 1:10] #this is t_lambda
 train_lambda$Id <- NULL
+
+' testing on bankruptcy data
+my_data <- read_excel("/Users/nikitavolodarsky/Documents/Data_balanced.xlsx", sheet = 1)
+train <- as.data.frame(my_data[1:30, ])
+train$B4 <- as.factor(train$B4)
+train$B5 <- NULL
+train$B6 <- NULL
+train_lambda <-as.data.frame(my_data[30:60,]) #this is t_lambda
+train_lambda$B4 <- as.factor(train_lambda$B4)
+train_lambda$B5 <- NULL
+train_lambda$B6 <- NULL'
 
 
 fit <- function(train, train_lambda) {
@@ -49,42 +59,73 @@ fit <- function(train, train_lambda) {
 }
 
 overproduction <- function(data) {
-  d@pool_classifiers <<- bagging(Class ~., data = data, coob = T) #Learn how to use var instead of Class
+  d@pool_classifiers <<- bagging(B4 ~., data = data, coob = T) #Learn how to use var instead of Class
 }
 
 metatraining <- function(data) {
     n <- dim(data)[1]
     first <- 1
     #For each x_j ∈ t_lambda
+    print("computing t_lambda_astr")
     for (i in 1:n){
       row <- data[i, ]
       h <- consensus(row) #Calculate consensus coef.
-      print(h)
-      if (h < 0.9){
+      if (h < 0.6){
         if(first==1){
-          t_lambda_astr <<- row
+          t_lambda_astr <- row
           first <- 2
         }
         else{
-          t_lambda_astr <<- rbind(t_lambda_astr, row)
+          t_lambda_astr <- rbind(t_lambda_astr, row)
         }
-        print("YES!!!")
       }
     }
+    t_lambda_astr <<- t_lambda_astr
     #Compute competence region for each element in t_lambda_astr
     #teta_j = {x1, ..., x_k} this is why teta_j is a List
+    print("computing competence region")
     teta <<- competence_region(data, t_lambda_astr)
     #Compute output profile
+    print("computing output profile")
     fi <<- output_profile(t_lambda_astr)
 
     #Extracting features
     #Neighbors׳ hard classification:
     #f_1 is a matrix
+    print("computing meta-feature 1")
     f_1 <<- get_feature1(teta)
+
+    #Probabilities
+    #f_2 is a matrix
+    print("computing meta-feature 2")
+    f_2 <<- get_feature2(teta)
 }
 
 generalization <- function() {
 
+}
+
+get_feature2 <- function(teta){
+  n <- length(teta$o)
+  #join all elements from teta, cuz' we don't need them separately here.
+  teta_elems <- numeric()
+  for(i in 1:n){
+    el <- teta$o[[i]]
+    teta_elems <- rbind(teta_elems, el)
+  }
+
+  f2 <- matrix(0, length(d@pool_classifiers$mtrees), dim(teta_elems)[1])
+  n <- dim(teta_elems)[1]
+  for (i in 1:n){
+    el <- teta_elems[i,1:ncol(teta_elems)-1] #element without class
+    preds <- get_probability(el)
+    n2 <- dim(preds)[1]
+    for (j in 1:n2){
+      pred <- preds[j,]
+      f2[j, i] <- max(pred)
+    }
+  }
+  return(f2)
 }
 
 #Neighbors׳ hard classification logics:
@@ -98,17 +139,15 @@ get_feature1 <- function(teta){
   }
   teta_elems <<- teta_elems
   #Matrix with feature 1. Default all zero:
-  f1 <- matrix(0, length(d@pool_classifiers$mtrees), length(teta_elems))
+  f1 <- matrix(0, length(d@pool_classifiers$mtrees), dim(teta_elems)[1])
   #get predictions
-  n <- length(teta_elems)
+  n <- dim(teta_elems)[1]
   for (i in 1:n){
     el <- teta_elems[i,1:ncol(teta_elems)-1] #element without class
     preds <- get_predictions_class(el)
     n2 <- dim(preds)[1]
     for (j in 1:n2){
       cls <- preds[j]
-      print(cls)
-      print(teta_elems[i, ncol(teta_elems)])
       #If prediction is correct change value to 1:
       if (levels(teta_elems[i, ncol(teta_elems)])[cls] == levels(teta_elems[i, ncol(teta_elems)])[1]){
         f1[j, i] <- 1
@@ -218,7 +257,6 @@ get_probability <- function(el){
 get_tree_n <- function(n){
   #returns the n regression tree from the pool of classificators
   #the pool of classificators is stored in variable "d"
-  #TO-DO if clause
   return(d@pool_classifiers$mtrees[[n]]$btree)
 }
 
