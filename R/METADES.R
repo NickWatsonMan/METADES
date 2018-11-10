@@ -79,7 +79,7 @@ metatraining <- function(data) {
 
     #Extracting features
     #Neighbors׳ hard classification:
-    #f1 is a matrix
+    #f_1 is a matrix
     f_1 <<- get_feature1(teta)
 }
 
@@ -124,13 +124,12 @@ consensus <- function(row){
   #TO-DO: comment
   for(i in 1:n){
     c <- get_tree_n(i)
-    res <- predict(c, row)
-    res_final <- rbind(res_final, res[1,])
+    res <- unname(predict(c, row, type=c("vector")))
+    res_final <- rbind(res_final, res)
   }
   #calculate the sum for each Class in res_final
-  res_final_col_sums <- colSums(res_final)
-  major_class_vote <- max(res_final_col_sums)
-  cons_coef <- major_class_vote / dim(res_final)[1]
+   res_table <- table(res_final)
+   cons_coef <- max(res_table) / length(res_final)
   return(cons_coef)
 }
 
@@ -185,7 +184,18 @@ get_predictions <- function(el){
   res_final <- numeric()
   for(i in 1:n){
     c <- get_tree_n(i)
-    res <- predict(c, el)
+    res <- predict(c, el, type="vector")
+    res_final <- rbind(res_final, res[1,])
+  }
+  return(res_final)
+}
+
+get_probability <- function(el){
+  n <- length(d@pool_classifiers$mtrees)
+  res_final <- numeric()
+  for(i in 1:n){
+    c <- get_tree_n(i)
+    res <- predict(c, el, type="prob")
     res_final <- rbind(res_final, res[1,])
   }
   return(res_final)
