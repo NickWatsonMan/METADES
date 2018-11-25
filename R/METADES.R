@@ -40,17 +40,16 @@ train$Id <- NULL
 train_lambda <- BreastCancer[1:150, 1:10] #this is t_lambda
 train_lambda$Id <- NULL
 
-' testing on bankruptcy data
-my_data <- read_excel("/Users/nikitavolodarsky/Documents/Data_balanced.xlsx", sheet = 1)
-train <- as.data.frame(my_data[1:30, ])
+# testing on bankruptcy data
+'my_data <- read_excel("/Users/nikitavolodarsky/Documents/Data_balanced.xlsx", sheet = 1)
+train <- as.data.frame(my_data[1:15, ])
 train$B4 <- as.factor(train$B4)
 train$B5 <- NULL
 train$B6 <- NULL
-train_lambda <-as.data.frame(my_data[30:60,]) #this is t_lambda
+train_lambda <-as.data.frame(my_data[21:35,]) #this is t_lambda
 train_lambda$B4 <- as.factor(train_lambda$B4)
 train_lambda$B5 <- NULL
 train_lambda$B6 <- NULL'
-
 
 fit <- function(train, train_lambda) {
   overproduction(train)
@@ -99,10 +98,66 @@ metatraining <- function(data) {
     #f_2 is a matrix
     print("computing meta-feature 2")
     f_2 <<- get_feature2(teta)
+
+    #Overall local accuracy:
+    print("computing meta-feature 3")
+    f_3 <<- get_feature3(teta)
 }
 
 generalization <- function() {
 
+}
+
+get_accuracy <- function(df, actual, predicted){
+  y <- as.vector(table(df[,predicted], df[,actual]))
+  if (length(y) < 4){
+    if (length(y) == 0){
+      y <- c(0,0,0,0)
+    }
+    if (length(y) == 1){
+      y <- c(y, 0, 0, 0)
+    }
+    if (length(y) == 2){
+      y <- c(y, 0, 0)
+    }
+    if (length(y) == 3){
+      y <- c(y, 0)
+    }
+  }
+  names(y) <- c("TN", "FP", "FN", "TP")
+  acur <- (y["TP"]+y["TN"])/sum(y)
+  return(as.numeric(acur))
+}
+
+get_feature3 <- function(teta){
+  n <- length(teta$o)
+  #join all elements from teta, cuz' we don't need them separately here.
+  teta_elems <- numeric()
+  for(i in 1:n){
+    el <- teta$o[[i]]
+    teta_elems <- rbind(teta_elems, el)
+  }
+
+  cust_elems <- teta_elems
+  colnames(cust_elems)[ncol(cust_elems)] <- "class"
+  cust_elems$scored <- 0
+
+  n <- length(d@pool_classifiers$mtrees)
+  #for each classifier
+  f3 <- matrix(0, length(d@pool_classifiers$mtrees), 1)
+  for(i in 1:n){
+    classifier <- get_tree_n(i)
+    n2 <- dim(cust_elems)[1]
+    #classify each element
+    for (j in 1:n2){
+      el <- cust_elems[j,1:(ncol(cust_elems)-2)]
+      prediction <- predict(classifier, el, type="class")
+      cust_elems[j,ncol(cust_elems)] <- prediction
+    }
+    acr <- get_accuracy(cust_elems, "class", "scored")
+    f3[i] <- acr
+  }
+  return(f3)
 }
 
 get_feature2 <- function(teta){
@@ -149,7 +204,8 @@ get_feature1 <- function(teta){
     for (j in 1:n2){
       cls <- preds[j]
       #If prediction is correct change value to 1:
-      if (levels(teta_elems[i, ncol(teta_elems)])[cls] == levels(teta_elems[i, ncol(teta_elems)])[1]){
+      #Check this!!
+      if (cls == teta_elems[i, ncol(teta_elems)]){
         f1[j, i] <- 1
       }
     }
