@@ -8,6 +8,9 @@ library("rpart")
 library("mlbench")
 library("FNN")
 library("zoo")
+library("readxl")
+library("rpart.plot")
+library("maptree")
 
 #MAIN FUNCTIONS
 #The Class of MET-DES
@@ -25,6 +28,8 @@ init <- function(pool_classifiers=NaN, meta_classifiers=NaN, Hc=.5) {
   library("mlbench")
   library("FNN")
   library("zoo")
+  library("readxl")
+  library("rpart.plot")
 
   d <<- new("metades", pool_classifiers=pool_classifiers,
             meta_classifiers = meta_classifiers,
@@ -32,16 +37,16 @@ init <- function(pool_classifiers=NaN, meta_classifiers=NaN, Hc=.5) {
 }
 
 #Example data for testing
-data(BreastCancer)
+'data(BreastCancer)
 BreastCancer$Id <- NULL
 
 train <- BreastCancer[1:50,] #this is t
 train$Id <- NULL
 train_lambda <- BreastCancer[1:150, 1:10] #this is t_lambda
-train_lambda$Id <- NULL
+train_lambda$Id <- NULL'
 
 # testing on bankruptcy data
-'my_data <- read_excel("/Users/nikitavolodarsky/Documents/Data_balanced.xlsx", sheet = 1)
+my_data <- read_excel("/Users/nikitavolodarsky/Documents/Data_balanced.xlsx", sheet = 1)
 train <- as.data.frame(my_data[1:15, ])
 train$B4 <- as.factor(train$B4)
 train$B5 <- NULL
@@ -49,7 +54,8 @@ train$B6 <- NULL
 train_lambda <-as.data.frame(my_data[21:35,]) #this is t_lambda
 train_lambda$B4 <- as.factor(train_lambda$B4)
 train_lambda$B5 <- NULL
-train_lambda$B6 <- NULL'
+train_lambda$B6 <- NULL
+
 
 fit <- function(train, train_lambda) {
   overproduction(train)
@@ -102,10 +108,67 @@ metatraining <- function(data) {
     #Overall local accuracy:
     print("computing meta-feature 3")
     f_3 <<- get_feature3(teta)
+
+    #Output profiles classification:
+    print("computing meta-feature 4")
+    f_4 <<- get_feature4(fi, t_lambda_astr)
+
+    #Classifier's confidence:
+    print("computing meta-feature 5")
+    f_5 <<- get_feature5()
+
+    print("calculating classifiers class")
+    classifiers_class <<- get_classifiers_class()
+
+    print("vector with meta-features v")
+    meta_features_vector <- cbind(f_1, f_2, f_3, f_4)
+
+    #meta_features_data_set <- cbind(meta_features_vector, )
 }
 
 generalization <- function() {
 
+}
+
+get_classifiers_class <- function(){
+  n <- dim(train_lambda)[1]
+  alpha <- matrix(0, length(d@pool_classifiers$mtrees), dim(train_lambda)[1])
+  #For each element in t_lambda
+  for(i in 1:n){
+    #classify with each classifier
+    el <- train_lambda[i, 1:ncol(train_lambda)-1]
+    predictions <- get_predictions_class(el)
+    n2 <- dim(predictions)[1]
+    for (j in 1:n2){
+      if(predictions[j] == train_lambda[i, ncol(train_lambda)]){
+        alpha[j,i] <- 1
+      }
+    }
+  }
+  return(alpha)
+}
+
+get_feature5 <- function(){
+  #this feature is to be done
+}
+
+get_feature4 <- function(fi, t_lambda_astr){
+  n <- length(fi$o)
+  f4 <- matrix(0, length(d@pool_classifiers$mtrees), n)
+  for(i in 1:n){
+    n2 <- length(d@pool_classifiers$mtrees)
+    for(j in 1:n2){
+      x_tilda_k <- fi$o[[i]][j]
+      w_i_k <- t_lambda_astr[i,ncol(t_lambda_astr)]
+      if (x_tilda_k == w_i_k){
+        f4[j, i] <- 1
+      }
+      else {
+        f4[j, i] <- 0
+      }
+    }
+  }
+  return(f4)
 }
 
 get_accuracy <- function(df, actual, predicted){
@@ -313,12 +376,13 @@ get_probability <- function(el){
 get_tree_n <- function(n){
   #returns the n regression tree from the pool of classificators
   #the pool of classificators is stored in variable "d"
-  return(d@pool_classifiers$mtrees[[n]]$btree)
+  #pruning the tree gives better prediction results
+  return(prune(d@pool_classifiers$mtrees[[n]]$btree, cp=0.3))
 }
 
 #TO-DO take it to another file
 #Testing Bagging package
-data(BreastCancer)
+'data(BreastCancer)
 BreastCancer$Id <- NULL
 res <- bagging(Class ~ Cl.thickness + Cell.size
                + Cell.shape + Marg.adhesion
@@ -366,5 +430,5 @@ cl<- lb
 
 ks <- FNN :: knn(ntr[,1:9], nts[,1:9], cl, k = 5)
 ats <- attributes(.Last.value)
-indices <- attr(ks, "nn.index")
+indices <- attr(ks, "nn.index")'
 
