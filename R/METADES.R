@@ -121,13 +121,42 @@ metatraining <- function(data) {
     classifiers_class <<- get_classifiers_class()
 
     print("vector with meta-features v")
-    meta_features_vector <- cbind(f_1, f_2, f_3, f_4)
+    meta_features_vector <<- cbind(f_1, f_2, f_3, f_4)
+    #meta_features_vector + classifiers_class
+    meta_f_v_and_classifiers_class <<- cbind(f_1, f_2, f_3, f_4, classifiers_class)
 
+    print("building meta-training data set")
+    meta_training_data_set <<- get_meta_training_data_set(meta_features_vector)
+
+    #t_lambda_meta_features_dataset
     #meta_features_data_set <- cbind(meta_features_vector, )
 }
 
 generalization <- function() {
 
+
+}
+
+get_meta_training_data_set <- function(meta_f_v){
+  res <- list(name="Meta Training Dataset", o = NULL)
+  res_final <- numeric()
+  n <- dim(train_lambda)[1]
+  n2 <- dim(meta_f_v)[1]
+  for(i in 1:n){
+    el <- train_lambda[i, 1:ncol(train_lambda) - 1]
+    for(j in 1:n2){
+      cls <- meta_f_v[j, 1:ncol(meta_f_v)]
+      #conver cls to data frame
+      m <- matrix(cls, nrow = 1)
+      dfcls <- data.frame(m)
+
+      el_cls <- cbind(el, dfcls)
+      res_final <- rbind(res_final, el_cls)
+    }
+    res$o[[i]] <- res_final
+  }
+
+  return(res)
 }
 
 get_classifiers_class <- function(){
