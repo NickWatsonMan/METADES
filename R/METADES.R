@@ -11,6 +11,9 @@ library("zoo")
 library("readxl")
 library("rpart.plot")
 library("maptree")
+library("RSNNS")
+library("minpack.lm")
+
 
 #MAIN FUNCTIONS
 #The Class of MET-DES
@@ -30,6 +33,8 @@ init <- function(pool_classifiers=NaN, meta_classifiers=NaN, Hc=.5) {
   library("zoo")
   library("readxl")
   library("rpart.plot")
+  library("RSNNS")
+  library("minpack.lm")
 
   d <<- new("metades", pool_classifiers=pool_classifiers,
             meta_classifiers = meta_classifiers,
@@ -46,28 +51,34 @@ train_lambda <- BreastCancer[1:150, 1:10] #this is t_lambda
 train_lambda$Id <- NULL'
 
 # testing on bankruptcy data
+
 my_data <- read_excel("/Users/nikitavolodarsky/Documents/Data_balanced.xlsx", sheet = 1)
 train <- as.data.frame(my_data[1:15, ])
 train$B4 <- as.factor(train$B4)
 train$B5 <- NULL
 train$B6 <- NULL
+
 train_lambda <-as.data.frame(my_data[21:35,]) #this is t_lambda
 train_lambda$B4 <- as.factor(train_lambda$B4)
 train_lambda$B5 <- NULL
 train_lambda$B6 <- NULL
 
+test <- as.data.frame(my_data[36:50, ])
+test$B4 <- as.factor(test$B4)
+test$B5 <- NULL
+test$B6 <- NULL
 
-fit <- function(train, train_lambda) {
+
+fit <- function(train, train_lambda, test) {
   overproduction(train)
-  metatraining(train_lambda)
-  #generalization()
+  metatraining(train_lambda, test)
 }
 
 overproduction <- function(data) {
   d@pool_classifiers <<- bagging(B4 ~., data = data, coob = T) #Learn how to use var instead of Class
 }
 
-metatraining <- function(data) {
+metatraining <- function(data, dtest) {
     n <- dim(data)[1]
     first <- 1
     #For each x_j ∈ t_lambda
@@ -118,7 +129,7 @@ metatraining <- function(data) {
     f_5 <<- get_feature5()
 
     print("calculating classifiers class")
-    classifiers_class <<- get_classifiers_class()
+    classifiers_class <<- get_classifiers_class(data)
 
     print("vector with meta-features v")
     meta_features_vector <<- cbind(f_1, f_2, f_3, f_4)
@@ -126,18 +137,143 @@ metatraining <- function(data) {
     meta_f_v_and_classifiers_class <<- cbind(f_1, f_2, f_3, f_4, classifiers_class)
 
     print("building meta-training data set")
-    meta_training_data_set <<- get_meta_training_data_set(meta_features_vector)
+    meta_training_data_set <<- get_meta_training_data_set(meta_features_vector, data)
 
-    #t_lambda_meta_features_dataset
-    #meta_features_data_set <- cbind(meta_features_vector, )
+    print("training meta-classifier")
+    meta_classifier <<- get_meta_classifier(meta_training_data_set, classifiers_class)
+
+    #GENERALIZATION PHASE
+    generalization(dtest, meta_training_data_set, classifiers_class, meta_classifier)
 }
 
-generalization <- function() {
+generalization <- function(data, dsel, class, m_classifier) {
+  #dsel to one dataframe
+  dsel_joined <- join_list(dsel)
 
+  ld <- dim(t_lambda_astr)[1]
+  #data <- data[1:ld,]
+  #Find the region of competence
+  print("region of comp")
+  g_com_reg <<- competence_region(data, dsel_joined[1:ld,])
 
+  #Find the output profile
+  print("output profile")
+  g_out_prof <<- output_profile(dsel_joined[1:ld,])
+
+  #f_1 is a matrix
+  print("computing meta-feature 1")
+  g_f_1 <<- get_feature1(g_com_reg)
+
+  #Probabilities
+  #f_2 is a matrix
+  print("computing meta-feature 2")
+  g_f_2 <<- get_feature2(g_com_reg)
+
+  #Overall local accuracy:
+  print("computing meta-feature 3")
+  g_f_3 <<- get_feature3(g_com_reg)
+
+  #Output profiles classification:
+  print("computing meta-feature 4")
+  g_f_4 <<- get_feature4(g_out_prof, data)
+
+  #Classifier's confidence:
+  #print("computing meta-feature 5")
+  #g_f_5 <<- get_feature5()
+  print("vector with meta-features v")
+  g_meta_features_vector <<- cbind(g_f_1, g_f_2, g_f_3, g_f_4)
+
+  print("building meta-training data set")
+  g_cls_class <<- get_classifiers_class(data)
+  g_meta_training_data_set <<- get_meta_training_data_set(g_meta_features_vector, data)
+  g_data_joined <<- join_list(g_meta_training_data_set)
+
+  #Start classifying
+  #b <- predict(mp, meta_training_data_set$o[[2]], type = "class")
+  xs <- match(g_data_joined['X1'], g_data_joined)
+  predict(meta_classifier, g_data_joined[1:2,xs:length(g_data_joined)])
+
+  print('Checking predictions')
+  res_classifier_ens <- list(name="Final Classifiers", o = NULL)
+  class_idx <- c()
+  ns <- length(g_meta_training_data_set$o)
+  for(i in 1:ns) {
+    for(j in 1:length(d@pool_classifiers$mtrees)){
+      #round(predict(meta_classifier, g_data_joined[j,xs:length(g_data_joined)]))
+      a <- round(predict(meta_classifier, g_meta_training_data_set$o[[i]][j,xs:length(g_data_joined)]))
+      b <- g_cls_class[j,]
+      perc <- sum(a==b)/length(b)
+      if (perc >= 0.6){
+        class_idx <- c(class_idx, j)
+      }
+    }
+  }
+
+  #print(unique(class_idx))
+  class_idx <<- unique(class_idx)
+  print('Computing final Classifier')
+  for(i in 1:length(unique(class_idx))){
+    print(i)
+    res_classifier_ens$o[[i]] <- d@pool_classifiers$mtrees[class_idx[i]]
+  }
+  pool <<- res_classifier_ens
 }
 
-get_meta_training_data_set <- function(meta_f_v){
+join_list <- function(data){
+  data_joined <- numeric()
+  n <- length(data$o)
+  for(i in 1:n){
+    el <- data$o[[i]]
+    data_joined <- rbind(data_joined, el)
+  }
+  return(data_joined)
+}
+
+get_meta_classifier <- function(mt_dataset, class){
+
+  #Dividing data in 75% for training and 25% for testing
+  train <- list(name="Training set", o = NULL)
+  test <- list(name="Testing set", o = NULL)
+  smp_size <- floor(0.75*length(meta_training_data_set$o))
+  for(i in 1:smp_size){
+    train$o[[i]] <- mt_dataset$o[[i]]
+  }
+  test_size <- length(meta_training_data_set$o) - smp_size
+  for(i in smp_size+1:test_size){
+    test$o[[i]] <- mt_dataset$o[[i]]
+  }
+
+  n <- length(train$o)
+
+  class_joined <- numeric()
+  train_joined <- numeric()
+  for(i in 1:n){
+    el <- train$o[[i]]
+    train_joined <- rbind(train_joined, el)
+    class_joined <- rbind(class_joined, class)
+  }
+
+  n <- length(test$o)
+  test_cls <- numeric()
+  test_joined <- numeric()
+  for(i in 1:n){
+    el <- test$o[[i]]
+    test_joined<- rbind( test_joined, el)
+    test_cls <- rbind(test_cls, class)
+  }
+
+
+  cja <<- class_joined
+  tja <<- train_joined
+
+  xs <- match(train_joined['X1'], train_joined)
+  mlp_train <<-  mlp(train_joined[,xs:length(train_joined)], class_joined, learnFunc = "Std_Backpropagation")
+  #prd <<- predict(mlp_train, test_joined, type="class")
+
+  return(mlp_train)
+}
+
+get_meta_training_data_set <- function(meta_f_v, train_lambda){
   res <- list(name="Meta Training Dataset", o = NULL)
   res_final <- numeric()
   n <- dim(train_lambda)[1]
@@ -154,12 +290,13 @@ get_meta_training_data_set <- function(meta_f_v){
       res_final <- rbind(res_final, el_cls)
     }
     res$o[[i]] <- res_final
+    res_final <- numeric()
   }
 
   return(res)
 }
 
-get_classifiers_class <- function(){
+get_classifiers_class <- function(train_lambda){
   n <- dim(train_lambda)[1]
   alpha <- matrix(0, length(d@pool_classifiers$mtrees), dim(train_lambda)[1])
   #For each element in t_lambda
@@ -331,8 +468,8 @@ competence_region <- function(tl, tla){
   #compute k nearest neighbors from t_lambda for each element in t_lambda_astr
   n <- dim(tla)[1]
   #to use k-NN no missing values are allowed
-  tl[is.na(tl)] <- 2 #think of this a bit better
-  tla[is.na(tla)] <- 2 #think of this a bit better
+  tl[is.na(tl)] <- 2.0 #think of this a bit better
+  tla[is.na(tla)] <- 2.0 #think of this a bit better
 
   #format to double structure
   dtl <- t(do.call(rbind, lapply(tl, as.numeric)))
@@ -460,4 +597,14 @@ cl<- lb
 ks <- FNN :: knn(ntr[,1:9], nts[,1:9], cl, k = 5)
 ats <- attributes(.Last.value)
 indices <- attr(ks, "nn.index")'
+#Testing MLP
+#mp <- mlp(meta_training_data_set$o[[1]], classifiers_class, learnFunc = "SCG")
+#b <- predict(mp, meta_training_data_set$o[[2]], type = "class")
 
+# Testing the final classifier
+#test1 <- as.data.frame(my_data[100:110, ])
+#test1$B4 <- NULL
+#test1$B5 <- NULL
+#test1$B6 <- NULL
+
+#predict(pool$o[[1]][1], test1)
