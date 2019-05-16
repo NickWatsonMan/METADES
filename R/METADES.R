@@ -10,7 +10,6 @@ library("FNN")
 library("zoo")
 library("readxl")
 library("rpart.plot")
-library("maptree")
 library("RSNNS")
 library("minpack.lm")
 
@@ -22,24 +21,6 @@ METADES <- setClass("metades", slots=list(
   meta_classifiers = "ANY",
   Hc = "numeric"
 ))
-
-init <- function(pool_classifiers=NaN, meta_classifiers=NaN, Hc=.5) {
-  #initialization of the METDES class
-  METADES()
-  library("ipred")
-  library("rpart")
-  library("mlbench")
-  library("FNN")
-  library("zoo")
-  library("readxl")
-  library("rpart.plot")
-  library("RSNNS")
-  library("minpack.lm")
-
-  d <<- new("metades", pool_classifiers=pool_classifiers,
-            meta_classifiers = meta_classifiers,
-            Hc = Hc)
-}
 
 #Example data for testing
 'data(BreastCancer)
@@ -70,6 +51,12 @@ test$B6 <- NULL
 
 
 fit <- function(train, train_lambda, test) {
+  #Class initialization
+  METADES()
+
+  #Class entity
+  d <<- new("metades", pool_classifiers = "ANY")
+
   overproduction(train)
   metatraining(train_lambda, test)
 }
@@ -216,7 +203,7 @@ generalization <- function(data, dsel, class, m_classifier) {
     print(i)
     res_classifier_ens$o[[i]] <- d@pool_classifiers$mtrees[class_idx[i]]
   }
-  pool <<- res_classifier_ens
+  res_ensemble <<- res_classifier_ens
 }
 
 join_list <- function(data){
@@ -545,6 +532,37 @@ get_tree_n <- function(n){
   #pruning the tree gives better prediction results
   return(prune(d@pool_classifiers$mtrees[[n]]$btree, cp=0.3))
 }
+
+
+getmode <- function(v) {
+  uniqv <- unique(v)
+  uniqv[which.max(tabulate(match(v, uniqv)))]
+}
+
+mdpredict <- function(ensemble, data){
+  n <- dim(data)[1]
+  n2 <- length(ensemble$o)
+  mtxpred <- numeric()
+  res <- numeric()
+
+  for(i in 1: n2){
+    prd <- predict((ensemble$o[[i]])[[1]]$btree, predt, type="class")
+    mtxpred <- rbind(mtxpred, prd)
+  }
+
+  for(i in 1:n){
+    res[i] <- getmode(mtxpred[,i])
+  }
+  res <- t(t(res))
+  return(res)
+}
+
+#(pool$o[[1]])[[1]]$btree
+
+predt <- as.data.frame(my_data[100:120, ])
+predt$B4 <- NULL
+predt$B5 <- NULL
+predt$B6 <- NULL
 
 #TO-DO take it to another file
 #Testing Bagging package
